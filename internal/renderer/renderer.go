@@ -64,10 +64,7 @@ func resolvePath(path string, ctx Context) string {
 	}
 
 	// Remove .tmpl extension
-	result := buf.String()
-	if strings.HasSuffix(result, ".tmpl") {
-		result = strings.TrimSuffix(result, ".tmpl")
-	}
+	result := strings.TrimSuffix(buf.String(), ".tmpl")
 
 	return result
 }

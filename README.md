@@ -111,6 +111,26 @@ cosmos init myapp --module github.com/your-org/myapp --template ddd-architecture
 
 No magic. No surprises.
 
+## Installation
+
+To run Cosmos from **any directory** (e.g. `/labs` instead of only inside the repo):
+
+```bash
+cd /caminho/para/cosmos-cli
+make install
+# or
+go install ./cmd/cosmos
+```
+
+Ensure your Go bin directory is in `PATH` (e.g. `$HOME/go/bin` or `$GOPATH/bin`). Then you can run:
+
+```bash
+cd ~/labs
+cosmos init api cosmos-api-demo --module github.com/myorg/payments
+```
+
+The new project is always created in the **current working directory**. So run `cosmos init` from the folder where you want the new project (e.g. `cd ~/labs` then `cosmos init api ...`).
+
 ## Building
 
 ```bash

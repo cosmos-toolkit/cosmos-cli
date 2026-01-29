@@ -281,35 +281,30 @@ func parseInitCommand(args []string) (*Config, error) {
 	template := fs.String("template", "", "External template name")
 	force := fs.Bool("force", false, "Overwrite existing directory")
 
-	if err := fs.Parse(args); err != nil {
-		return nil, err
-	}
-
-	remaining := fs.Args()
-	if len(remaining) == 0 {
+	if len(args) == 0 {
 		return nil, fmt.Errorf("project name is required")
 	}
 
 	var config Config
+	var flagArgs []string
 
-	// Check if first arg is a type (api, worker, cli) or project name
-	if len(remaining) == 1 {
-		// Only project name provided - requires --template
-		if *template == "" {
-			return nil, fmt.Errorf("either specify a type (api, worker, cli) or use --template")
-		}
-		config.ProjectName = remaining[0]
-	} else if len(remaining) == 2 {
-		// Could be: type + name OR name + something else
-		// Check if first is a valid type
-		if isValidType(remaining[0]) {
-			config.Type = remaining[0]
-			config.ProjectName = remaining[1]
-		} else {
-			return nil, fmt.Errorf("invalid type: %s. Valid types: api, worker, cli", remaining[0])
-		}
-	} else {
-		return nil, fmt.Errorf("too many arguments")
+	// Parse positionals first so flags can appear after them (e.g. cosmos init api myapp --module x).
+	// Go's flag package stops at the first non-flag, so we must split positionals from flag args ourselves.
+	if len(args) >= 2 && isValidType(args[0]) {
+		config.Type = args[0]
+		config.ProjectName = args[1]
+		flagArgs = args[2:]
+	} else if len(args) >= 1 {
+		config.ProjectName = args[0]
+		flagArgs = args[1:]
+	}
+
+	if err := fs.Parse(flagArgs); err != nil {
+		return nil, err
+	}
+
+	if config.Type == "" && *template == "" {
+		return nil, fmt.Errorf("either specify a type (api, worker, cli) or use --template")
 	}
 
 	if *module == "" {
