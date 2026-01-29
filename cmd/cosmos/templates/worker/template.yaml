@@ -1,0 +1,17 @@
+name: worker
+version: 0.1.0
+types: ["worker"]
+defaults:
+  goVersion: "1.23"
+prompts:
+  - key: module
+    description: "Go module path"
+    required: true
+  - key: projectName
+    description: "Project name"
+    required: true
+features:
+  - processing
+  - logging
+files:
+  engine: gotmpl

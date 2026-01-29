@@ -1,0 +1,29 @@
+package command
+
+import (
+	"flag"
+	"fmt"
+)
+
+type Command struct{}
+
+func New() *Command {
+	return &Command{}
+}
+
+func (c *Command) Execute(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("no command specified")
+	}
+
+	cmd := args[0]
+	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
+
+	switch cmd {
+	case "version":
+		fmt.Println("{{.ProjectName}} v0.1.0")
+		return nil
+	default:
+		return fmt.Errorf("unknown command: %s", cmd)
+	}
+}

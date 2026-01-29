@@ -1,0 +1,18 @@
+package job
+
+type Job interface {
+	ID() string
+	Execute() error
+}
+
+type BaseJob struct {
+	id string
+}
+
+func NewBaseJob(id string) *BaseJob {
+	return &BaseJob{id: id}
+}
+
+func (j *BaseJob) ID() string {
+	return j.id
+}

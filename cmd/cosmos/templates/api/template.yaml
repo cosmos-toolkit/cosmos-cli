@@ -1,0 +1,17 @@
+name: api
+version: 0.1.0
+types: ["api"]
+defaults:
+  goVersion: "1.23"
+prompts:
+  - key: module
+    description: "Go module path"
+    required: true
+  - key: projectName
+    description: "Project name"
+    required: true
+features:
+  - http
+  - logging
+files:
+  engine: gotmpl

@@ -1,0 +1,18 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+
+	"{{.Module}}/internal/command"
+)
+
+func main() {
+	cmd := command.New()
+
+	if err := cmd.Execute(os.Args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}

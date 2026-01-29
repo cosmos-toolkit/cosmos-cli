@@ -1,0 +1,44 @@
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"{{.Module}}/internal/processor"
+)
+
+func main() {
+	proc := processor.New()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start processor
+	go func() {
+		if err := proc.Start(ctx); err != nil {
+			log.Fatalf("processor failed: %v", err)
+		}
+	}()
+
+	log.Println("Worker started")
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down worker...")
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := proc.Stop(shutdownCtx); err != nil {
+		log.Fatalf("worker forced to shutdown: %v", err)
+	}
+
+	log.Println("Worker exited")
+}

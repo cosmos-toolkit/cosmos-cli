@@ -1,0 +1,20 @@
+package server
+
+import (
+	"net/http"
+
+	"{{.Module}}/internal/handler"
+)
+
+func New() *http.Server {
+	mux := http.NewServeMux()
+
+	// Register handlers
+	h := handler.New()
+	mux.HandleFunc("/health", h.Health)
+
+	return &http.Server{
+		Addr:    ":8080",
+		Handler: mux,
+	}
+}

@@ -1,0 +1,13 @@
+.PHONY: run build test clean
+
+run:
+	go run cmd/worker/main.go
+
+build:
+	go build -o bin/{{.ProjectName}} cmd/worker/main.go
+
+test:
+	go test ./...
+
+clean:
+	rm -rf bin/

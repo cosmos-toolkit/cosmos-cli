@@ -1,0 +1,49 @@
+package processor
+
+import (
+	"context"
+	"log"
+	"time"
+
+	"{{.Module}}/internal/job"
+)
+
+type Processor struct {
+	jobQueue chan job.Job
+}
+
+func New() *Processor {
+	return &Processor{
+		jobQueue: make(chan job.Job, 100),
+	}
+}
+
+func (p *Processor) Start(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case j := <-p.jobQueue:
+			if err := p.processJob(ctx, j); err != nil {
+				log.Printf("failed to process job: %v", err)
+			}
+		}
+	}
+}
+
+func (p *Processor) processJob(ctx context.Context, j job.Job) error {
+	log.Printf("Processing job: %s", j.ID())
+	// Simulate work
+	time.Sleep(100 * time.Millisecond)
+	return nil
+}
+
+func (p *Processor) Stop(ctx context.Context) error {
+	// Wait for jobs to finish or timeout
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(5 * time.Second):
+		return nil
+	}
+}

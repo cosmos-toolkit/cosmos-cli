@@ -1,0 +1,13 @@
+.PHONY: run build test clean
+
+run:
+	go run cmd/{{.ProjectName}}/main.go
+
+build:
+	go build -o bin/{{.ProjectName}} cmd/{{.ProjectName}}/main.go
+
+test:
+	go test ./...
+
+clean:
+	rm -rf bin/
