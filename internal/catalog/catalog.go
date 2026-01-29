@@ -25,7 +25,7 @@ func (c *Catalog) loadEmbeddedTemplates() {
 	}
 
 	// templatesFS root is the "templates" dir (api, worker, cli)
-	entries, err := templatesFS.ReadDir(".")
+	entries, err := fs.ReadDir(templatesFS, ".")
 	if err != nil {
 		return
 	}

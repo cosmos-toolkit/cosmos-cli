@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -15,6 +16,8 @@ import (
 	"github.com/cosmos-toolkit/cosmos-cli/internal/writer"
 )
 
+const version = "0.1.0"
+
 type Config struct {
 	Type        string
 	ProjectName string
@@ -24,20 +27,118 @@ type Config struct {
 }
 
 func Execute() error {
-	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: cosmos init [type] <name> [flags] or cosmos init <name> --template <name>")
+	args := os.Args[1:]
+
+	// No args or --help/-h at top level
+	if len(args) == 0 {
+		printUsage(os.Stdout)
+		return nil
+	}
+	if args[0] == "--help" || args[0] == "-h" {
+		printUsage(os.Stdout)
+		return nil
+	}
+	if args[0] == "version" || args[0] == "--version" || args[0] == "-v" {
+		fmt.Printf("cosmos version %s\n", version)
+		return nil
 	}
 
-	if os.Args[1] != "init" {
-		return fmt.Errorf("unknown command: %s", os.Args[1])
+	if args[0] != "init" {
+		return fmt.Errorf("unknown command: %s\n\nRun 'cosmos --help' for usage", args[0])
 	}
 
-	config, err := parseInitCommand(os.Args[2:])
+	// cosmos init --help or cosmos init -h
+	if len(args) >= 2 && (args[1] == "--help" || args[1] == "-h") {
+		printInitUsage(os.Stdout)
+		return nil
+	}
+
+	config, err := parseInitCommand(args[1:])
 	if err != nil {
+		if err == flag.ErrHelp {
+			printInitUsage(os.Stdout)
+			return nil
+		}
 		return err
 	}
 
 	return executeInit(config)
+}
+
+func printUsage(w io.Writer) {
+	fmt.Fprintf(w, `Cosmos — Initialize Go projects from templates.
+
+USAGE:
+  cosmos init [type] <name> [flags]   Create project with built-in template
+  cosmos init <name> --template <n>  Create project with external template
+  cosmos version                    Show version
+  cosmos --help                     Show this help
+
+COMMANDS:
+  init    Initialize a new Go project from a template
+
+BUILT-IN TYPES (use with init):
+  api     HTTP service
+  worker  Background processing / async jobs
+  cli     Command-line tool
+
+EXAMPLES:
+  cosmos init api payments --module github.com/user/payments
+  cosmos init worker jobs --module github.com/user/jobs
+  cosmos init myapp --module github.com/user/myapp --template hexagonal-architecture
+
+FLAGS (init):
+  --module string    Go module path (required)
+  --template string  External template name (from github.com/cosmos-cli/templates/<name>)
+  --force            Overwrite existing directory
+
+Run 'cosmos init --help' for init command details.
+`)
+}
+
+func printInitUsage(w io.Writer) {
+	fmt.Fprintf(w, `Initialize a new Go project from a template.
+
+USAGE:
+  cosmos init [type] <name> [flags]
+  cosmos init <name> --template <name> [flags]
+
+  With built-in type (api, worker, cli):
+    cosmos init <type> <project-name> --module <module-path>
+
+  With external template (from GitHub):
+    cosmos init <project-name> --template <template-name> --module <module-path>
+
+ARGUMENTS:
+  type          One of: api, worker, cli (required when not using --template)
+  project-name  Name of the project directory to create
+  template-name Name of external template (e.g. hexagonal-architecture)
+
+FLAGS:
+  --module string
+      Go module path (required). Example: github.com/user/repo
+  --template string
+      External template name. Fetched from github.com/cosmos-cli/templates/<name>
+      Cached under ~/.cache/cosmos/templates/
+  --force
+      Overwrite existing project directory if it exists
+
+EXAMPLES:
+  # API project
+  cosmos init api payments --module github.com/myorg/payments
+
+  # Worker project
+  cosmos init worker jobs --module github.com/myorg/jobs
+
+  # CLI tool
+  cosmos init cli toolbox --module github.com/myorg/toolbox
+
+  # External template (e.g. DDD, Hexagonal)
+  cosmos init myapp --module github.com/myorg/myapp --template ddd-architecture
+
+  # Overwrite existing directory
+  cosmos init api payments --module github.com/myorg/payments --force
+`)
 }
 
 func executeInit(config *Config) error {
@@ -146,6 +247,7 @@ func executeInit(config *Config) error {
 
 func parseInitCommand(args []string) (*Config, error) {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	fs.Usage = func() { printInitUsage(os.Stdout) }
 	module := fs.String("module", "", "Go module path (required)")
 	template := fs.String("template", "", "External template name")
 	force := fs.Bool("force", false, "Overwrite existing directory")
