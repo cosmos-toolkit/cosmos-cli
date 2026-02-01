@@ -1,8 +1,0 @@
-# Example configuration. Rename to config.yaml or use environment variables.
-server:
-  addr: ":8080"
-  read_timeout: 15s
-  write_timeout: 15s
-# Uncomment when using an external repository (pkg/database, etc.)
-# database:
-#   url: "postgres://user:pass@localhost:5432/dbname?sslmode=disable"

@@ -37,18 +37,22 @@ Cosmos works with **systems**, not stacks.
 
 ### System types
 
-Cosmos starts from a small set of well-defined system types:
+Cosmos starts from a small set of well-defined system types (built-in and external):
 
 - **api** — HTTP services and public interfaces
 - **worker** — background processing and async jobs
 - **cli** — developer tools and automation
 
-Each type has a clear responsibility and a coherent structure.
+External templates (e.g. api-hexagonal, monorepo-starter) are listed in the interactive menu. Each type has a clear responsibility and a coherent structure.
+
+**Interactive (recommended):** run `cosmos init` and choose template and options from the prompts.
+
+**Non-interactive:** pass type, name, and flags:
 
 ```bash
-cosmos init api payments
-cosmos init worker jobs
-cosmos init cli toolbox
+cosmos init api payments --module github.com/your-org/payments
+cosmos init worker jobs --module github.com/your-org/jobs
+cosmos init cli toolbox --module github.com/your-org/toolbox
 ```
 
 ## Templates as contracts
@@ -77,9 +81,40 @@ The ideas apply to systems — not just code.
 
 ## Usage
 
-### Built-in templates (api, worker, cli)
+### Interactive mode (recommended)
 
-Initialize a project with a built-in type:
+The simplest way to create a project: run `cosmos init` with no arguments. Cosmos will ask:
+
+1. **Project name** — directory name for the new project
+2. **Template** — choose from a list:
+   - **Built-in:** api, worker, cli
+   - **External (GitHub):** api-clean-arch, api-grpc, api-hexagonal, cli, monorepo-starter, worker-cron, worker-queue
+3. **Module path** — Go module (e.g. `github.com/your-org/myapp`); a default is suggested from your username and project name
+4. **Overwrite?** — if the directory already exists, confirm to replace it
+
+```bash
+cosmos init
+# or explicitly
+cosmos init --interactive
+cosmos init -i
+```
+
+No flags needed. Cosmos validates names and module paths as you go.
+
+### Listing templates and packages
+
+Before or instead of the interactive flow, you can list what’s available:
+
+```bash
+cosmos list templates   # Built-in + external templates (from GitHub)
+cosmos list pkgs        # Reusable packages (logger, config, validator, ...)
+```
+
+### Command-line mode (non-interactive)
+
+When you already know the type and flags, you can skip the wizard:
+
+**Built-in types (api, worker, cli):**
 
 ```bash
 cosmos init api payments --module github.com/your-org/payments
@@ -87,20 +122,34 @@ cosmos init worker jobs --module github.com/your-org/jobs
 cosmos init cli toolbox --module github.com/your-org/toolbox
 ```
 
-### External templates (GitHub)
-
-Initialize a project with an external template by name. Templates are fetched from the `github.com/cosmos-toolkit/templates` monorepo using Git sparse checkout (only the chosen folder is downloaded) and cached under `~/.cache/cosmos/templates/`:
+**External templates (from GitHub):**  
+Templates are fetched from `github.com/cosmos-toolkit/templates` via Git sparse checkout and cached under `~/.cache/cosmos/templates/`:
 
 ```bash
-cosmos init myapp --module github.com/your-org/myapp --template hexagonal-architecture
-cosmos init myapp --module github.com/your-org/myapp --template ddd-architecture
+cosmos init myapp --module github.com/your-org/myapp --template api-hexagonal
+cosmos init myapp --module github.com/your-org/myapp --template monorepo-starter
 ```
 
-### Flags
+**Flags:**
 
-- `--module` (required) — Go module path (e.g. `github.com/user/repo`)
+- `--module` (required in non-interactive mode) — Go module path
+- `--template` — External template name (e.g. `api-clean-arch`, `worker-queue`)
 - `--force` — Overwrite existing directory
-- `--template` — External template name (fetched from GitHub)
+- `--list`, `-l` — List available templates and exit
+
+### Adding packages to an existing project
+
+From the root of a Go project (where `go.mod` is):
+
+```bash
+cosmos pkg logger    # copies pkg/logger + copy_deps, rewrites imports
+cosmos pkg config   # copies pkg/config, runs go get for dependencies
+cosmos pkg validator
+```
+
+Use `cosmos list pkgs` to see all available packages.
+
+---
 
 **Cosmos will:**
 
@@ -113,23 +162,50 @@ No magic. No surprises.
 
 ## Installation
 
-To run Cosmos from **any directory** (e.g. `/labs` instead of only inside the repo):
+Cosmos is a single binary. Install it once and run `cosmos` from any directory (like `docker` or `go`).
+
+### Option 1: Install without Go (recommended)
+
+**Linux / macOS** — run the install script (downloads the latest release binary):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/cosmos-toolkit/cosmos-cli/main/scripts/install.sh | sh
+```
+
+The script detects your OS and architecture, downloads the matching binary from [GitHub Releases](https://github.com/cosmos-toolkit/cosmos-cli/releases), and installs it to `~/.local/bin` (or `/usr/local/bin` if writable). Add that directory to your `PATH` if needed:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+**Windows** — download the `.zip` for your architecture from [Releases](https://github.com/cosmos-toolkit/cosmos-cli/releases), extract `cosmos.exe`, and place it in a directory that is in your `PATH`.
+
+### Option 2: Install with Go
+
+If you have Go 1.21+ installed:
+
+```bash
+go install github.com/cosmos-toolkit/cosmos-cli/cmd/cosmos@latest
+```
+
+The binary is placed in `$HOME/go/bin`. Ensure that directory is in your `PATH`:
+
+```bash
+export PATH="$HOME/go/bin:$PATH"
+```
+
+### Option 3: Install from source (development)
+
+If you have the repo cloned:
 
 ```bash
 cd /caminho/para/cosmos-cli
 make install
-# or
-go install ./cmd/cosmos
 ```
 
-Ensure your Go bin directory is in `PATH` (e.g. `$HOME/go/bin` or `$GOPATH/bin`). Then you can run:
+---
 
-```bash
-cd ~/labs
-cosmos init api cosmos-api-demo --module github.com/myorg/payments
-```
-
-The new project is always created in the **current working directory**. So run `cosmos init` from the folder where you want the new project (e.g. `cd ~/labs` then `cosmos init api ...`).
+The new project is always created in the **current working directory**. Run `cosmos init` from the folder where you want the project (e.g. `cd ~/labs` then `cosmos init api ...`).
 
 ## Building
 
@@ -144,43 +220,45 @@ go build -o bin/cosmos ./cmd/cosmos
 ### 1. Build the CLI
 
 ```bash
-cd /caminho/para/cli
+cd /caminho/para/cosmos-cli
 go mod download   # baixa dependências (precisa de rede)
 make build
 ```
 
-### 2. Test with built-in templates
+### 2. Test interactive mode
 
-Crie um diretório temporário e rode o cosmos a partir do binário:
+Crie um diretório temporário e rode o cosmos (sem argumentos) para abrir o menu interativo:
 
 ```bash
 mkdir -p /tmp/cosmos-test && cd /tmp/cosmos-test
+cosmos init
+# Responda: project name, escolha um template (api/worker/cli ou externo), module path
+ls <nome-do-projeto>/
+```
+
+Se o cosmos estiver no `PATH` (por exemplo após `make install`), use `cosmos init` de qualquer pasta.
+
+### 3. Test non-interactive (built-in templates)
+
+```bash
+cd /tmp/cosmos-test
 
 # API
-/path/to/cli/bin/cosmos init api payments --module github.com/you/payments
+cosmos init api payments --module github.com/you/payments
 ls payments/                    # deve listar go.mod, cmd/, internal/, README.md, etc.
 cd payments && go build ./...   # deve compilar
 
 cd /tmp/cosmos-test
-
 # Worker
-/path/to/cli/bin/cosmos init worker jobs --module github.com/you/jobs
+cosmos init worker jobs --module github.com/you/jobs
 ls jobs/
 
 # CLI
-/path/to/cli/bin/cosmos init cli toolbox --module github.com/you/toolbox
+cosmos init cli toolbox --module github.com/you/toolbox
 ls toolbox/
 ```
 
-Se o cosmos estiver no `PATH` (por exemplo após `make install`):
-
-```bash
-cosmos init api payments --module github.com/you/payments
-cosmos init worker jobs --module github.com/you/jobs
-cosmos init cli toolbox --module github.com/you/toolbox
-```
-
-### 3. Test validation (erros esperados)
+### 4. Test validation (erros esperados)
 
 ```bash
 # Falta --module
@@ -196,7 +274,7 @@ cosmos init api "my project" --module github.com/you/payments
 # Error: project name can only contain...
 ```
 
-### 4. Test with --force
+### 5. Test with --force
 
 ```bash
 cosmos init api payments --module github.com/you/payments
@@ -207,12 +285,13 @@ cosmos init api payments --module github.com/you/payments --force
 # Deve sobrescrever sem erro
 ```
 
-### 5. Test external template (opcional)
+### 6. Test external template (opcional)
 
 Requer rede e o repositório `github.com/cosmos-toolkit/templates/<nome>` existir:
 
 ```bash
-cosmos init myapp --module github.com/you/myapp --template hexagonal-architecture
+cosmos init myapp --module github.com/you/myapp --template api-hexagonal
+# ou: cosmos list templates  para ver todos os externos
 ```
 
 ## Project structure

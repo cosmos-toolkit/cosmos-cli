@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos-toolkit/cosmos-cli/internal/catalog"
 	"github.com/cosmos-toolkit/cosmos-cli/internal/github"
 	"github.com/cosmos-toolkit/cosmos-cli/internal/loader"
+	"github.com/cosmos-toolkit/cosmos-cli/internal/pkginstall"
 	"github.com/cosmos-toolkit/cosmos-cli/internal/renderer"
 	"github.com/cosmos-toolkit/cosmos-cli/internal/resolver"
 	"github.com/cosmos-toolkit/cosmos-cli/internal/rules"
@@ -67,6 +68,8 @@ func Execute() error {
 		return executeList(args[1:])
 	case "init":
 		return executeInitCommand(args[1:])
+	case "pkg":
+		return executePkg(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s\n\nRun 'cosmos --help' for usage", args[0])
 	}
@@ -160,6 +163,53 @@ func runListPackages(w io.Writer) error {
 	return nil
 }
 
+func executePkg(args []string) error {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
+		printPkgUsage(os.Stdout)
+		return nil
+	}
+
+	name := args[0]
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	if err := pkginstall.Install(name, cwd); err != nil {
+		return err
+	}
+
+	fmt.Printf("%s Package %s installed in %s/pkg/%s\n", green+"✓"+reset, accent(name), dimmed(cwd), accent(name))
+	return nil
+}
+
+func printPkgUsage(w io.Writer) {
+	printBanner(w)
+	fmt.Fprintf(w, `%s
+
+  %s pkg %s       Install a package into the current project
+  %s pkg %s       List available packages
+
+  Run from the root of your Go project (where go.mod is).
+  The package and its copy_deps are copied to pkg/<name> and imports
+  are rewritten to your module path. Dependencies are added with go get.
+
+%s
+  %s pkg %s
+  %s pkg %s
+  %s pkg %s
+
+`,
+		title("Install a reusable package into the current project."),
+		cmd("cosmos"), accent("<name>"),
+		cmd("cosmos"), accent("list pkgs"),
+		section("EXAMPLES:"),
+		dimmed("#"), cmd("cosmos"), accent("logger"),
+		dimmed("#"), cmd("cosmos"), accent("config"),
+		dimmed("#"), cmd("cosmos"), accent("validator"),
+	)
+}
+
 func printListUsage(w io.Writer) {
 	printBanner(w)
 	fmt.Fprintf(w, `%s
@@ -187,6 +237,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, `%s
 
   %s init              Start a new project (interactive)
+  %s pkg %s       Install a package (logger, config, ...) into current project
   %s list %s     List available templates
   %s list %s     List available packages
 
@@ -196,6 +247,7 @@ func printUsage(w io.Writer) {
 `,
 		section("USAGE:"),
 		cmd("cosmos"),
+		cmd("cosmos"), accent("<name>"),
 		cmd("cosmos"), accent("templates"),
 		cmd("cosmos"), accent("pkgs"),
 		cmd("cosmos"), flagStyle("--help"), flagStyle("-h"),
