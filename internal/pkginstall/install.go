@@ -28,9 +28,16 @@ type PackageMeta struct {
 	GoGet    []string `yaml:"go_get"`
 }
 
+// InstallOpts configures Install behavior.
+type InstallOpts struct {
+	// Force overwrites existing pkg/<name> (and copy_deps) after removing them.
+	Force bool
+}
+
 // Install copia o pacote name e seus copy_deps para pkg/ no cwd, reescreve
 // imports para o module do projeto e executa go get para go_get.
-func Install(name, cwd string) error {
+// If opts.Force is true and pkg/<name> (or any copy_dep) already exists, it is removed first.
+func Install(name, cwd string, opts InstallOpts) error {
 	manifestData, err := github.GetPackagesManifest()
 	if err != nil {
 		return fmt.Errorf("failed to fetch manifest: %w", err)
@@ -76,6 +83,13 @@ func Install(name, cwd string) error {
 		dst := filepath.Join(dstPkg, n)
 		if _, err := os.Stat(src); err != nil {
 			return fmt.Errorf("package %q not found in repo: %w", n, err)
+		}
+		if opts.Force {
+			if err := os.RemoveAll(dst); err != nil {
+				return fmt.Errorf("failed to remove existing %q: %w", n, err)
+			}
+		} else if _, err := os.Stat(dst); err == nil {
+			return fmt.Errorf("package %q already exists in pkg/%s; use --force to overwrite", n, n)
 		}
 		if err := copyDir(src, dst); err != nil {
 			return fmt.Errorf("failed to copy %q: %w", n, err)

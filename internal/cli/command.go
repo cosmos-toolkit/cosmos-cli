@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -19,6 +18,7 @@ import (
 	"github.com/cosmos-toolkit/cosmos-cli/internal/resolver"
 	"github.com/cosmos-toolkit/cosmos-cli/internal/rules"
 	"github.com/cosmos-toolkit/cosmos-cli/internal/writer"
+	"github.com/olekukonko/tablewriter"
 )
 
 const version = "0.1.0"
@@ -70,6 +70,10 @@ func Execute() error {
 		return executeInitCommand(args[1:])
 	case "pkg":
 		return executePkg(args[1:])
+	case "update":
+		return executeUpdate(args[1:])
+	case "cache":
+		return executeCache(args[1:])
 	default:
 		return fmt.Errorf("unknown command: %s\n\nRun 'cosmos --help' for usage", args[0])
 	}
@@ -126,16 +130,28 @@ func executeList(args []string) error {
 func runListTemplates(w io.Writer) error {
 	printBanner(w)
 	fmt.Fprintf(w, "%s\n\n", title("Available templates"))
-	fmt.Fprintf(w, "%s\n", dimmed("github.com/cosmos-toolkit/templates"))
-	fmt.Fprintf(w, "\n")
+	fmt.Fprintf(w, "%s\n\n", dimmed("github.com/cosmos-toolkit/templates"))
 
-	items, err := github.ListTemplates()
+	templates, err := github.ListTemplatesWithInfo()
 	if err != nil {
 		return fmt.Errorf("failed to list templates: %w", err)
 	}
-	sort.Strings(items)
-	for _, name := range items {
-		fmt.Fprintf(w, "  %s\n", accent(name))
+	if len(templates) == 0 {
+		fmt.Fprintf(w, "  %s\n", dimmed("(no templates yet)"))
+		fmt.Fprintln(w)
+		return nil
+	}
+
+	data := [][]string{{"NAME", "DESCRIPTION", "LINK"}}
+	for _, t := range templates {
+		data = append(data, []string{t.Name, t.Description, t.Link})
+	}
+
+	table := tablewriter.NewWriter(w)
+	table.Header(data[0])
+	table.Bulk(data[1:])
+	if err := table.Render(); err != nil {
+		return fmt.Errorf("failed to render table: %w", err)
 	}
 	fmt.Fprintln(w)
 	return nil
@@ -144,38 +160,95 @@ func runListTemplates(w io.Writer) error {
 func runListPackages(w io.Writer) error {
 	printBanner(w)
 	fmt.Fprintf(w, "%s\n\n", title("Available packages"))
-	fmt.Fprintf(w, "%s\n", dimmed("github.com/cosmos-toolkit/packages"))
-	fmt.Fprintf(w, "\n")
+	fmt.Fprintf(w, "%s\n\n", dimmed("github.com/cosmos-toolkit/packages"))
 
-	items, err := github.ListPackages()
+	pkgs, err := github.ListPackagesWithInfo()
 	if err != nil {
 		return fmt.Errorf("failed to list packages: %w", err)
 	}
-	sort.Strings(items)
-	if len(items) == 0 {
+	if len(pkgs) == 0 {
 		fmt.Fprintf(w, "  %s\n", dimmed("(no packages yet)"))
-	} else {
-		for _, name := range items {
-			fmt.Fprintf(w, "  %s\n", accent(name))
-		}
+		fmt.Fprintln(w)
+		return nil
+	}
+
+	data := [][]string{{"NAME", "DESCRIPTION", "LINK"}}
+	for _, p := range pkgs {
+		data = append(data, []string{p.Name, p.Description, p.Link})
+	}
+
+	table := tablewriter.NewWriter(w)
+	table.Header(data[0])
+	table.Bulk(data[1:])
+	if err := table.Render(); err != nil {
+		return fmt.Errorf("failed to render table: %w", err)
 	}
 	fmt.Fprintln(w)
 	return nil
 }
 
-func executePkg(args []string) error {
+func executeUpdate(args []string) error {
+	if len(args) >= 1 && (args[0] == "--help" || args[0] == "-h") {
+		printUpdateUsage(os.Stdout)
+		return nil
+	}
+	okT, err := resolver.PullTemplatesRepo()
+	if err != nil {
+		return err
+	}
+	if okT {
+		fmt.Printf("%s Templates cache updated\n", green+"✓"+reset)
+	}
+	okP, err := resolver.PullPackagesRepo()
+	if err != nil {
+		return err
+	}
+	if okP {
+		fmt.Printf("%s Packages cache updated\n", green+"✓"+reset)
+	}
+	if !okT && !okP {
+		fmt.Println(dimmed("No cache found. Use 'cosmos init' or 'cosmos pkg' to create it."))
+	}
+	return nil
+}
+
+func executeCache(args []string) error {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
+		printCacheUsage(os.Stdout)
+		return nil
+	}
+	if args[0] != "refresh" {
+		return fmt.Errorf("unknown subcommand: %s\n\nRun 'cosmos cache --help' for usage", args[0])
+	}
+	return executeUpdate(args[1:])
+}
+
+func executePkg(args []string) error {
+	if len(args) >= 1 && (args[0] == "--help" || args[0] == "-h") {
 		printPkgUsage(os.Stdout)
 		return nil
 	}
 
-	name := args[0]
+	force, positionals := parsePkgArgs(args)
+
+	// cosmos pkg (no positionals) or only -i/--interactive -> interactive mode
+	if len(positionals) == 0 {
+		return runInteractivePkg(force)
+	}
+
+	name := positionals[0]
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	if err := pkginstall.Install(name, cwd); err != nil {
+	pkgDir := filepath.Join(cwd, "pkg", name)
+	if writer.DirectoryExists(pkgDir) && force {
+		fmt.Printf("%s Overwriting existing %s\n", dimmed("→"), dimmed("pkg/"+name))
+	}
+
+	opts := pkginstall.InstallOpts{Force: force}
+	if err := pkginstall.Install(name, cwd, opts); err != nil {
 		return err
 	}
 
@@ -183,10 +256,27 @@ func executePkg(args []string) error {
 	return nil
 }
 
+// parsePkgArgs extracts --force/-f and returns (force, positionals).
+// Positionals are args that are not --help, -h, -i, --interactive, --force, -f.
+func parsePkgArgs(args []string) (force bool, positionals []string) {
+	for _, a := range args {
+		switch a {
+		case "--force", "-f":
+			force = true
+		case "--help", "-h", "--interactive", "-i":
+			// skip
+		default:
+			positionals = append(positionals, a)
+		}
+	}
+	return force, positionals
+}
+
 func printPkgUsage(w io.Writer) {
 	printBanner(w)
 	fmt.Fprintf(w, `%s
 
+  %s pkg                    Interactive: list packages, select one or more to install
   %s pkg %s       Install a package into the current project
   %s pkg %s       List available packages
 
@@ -194,19 +284,37 @@ func printPkgUsage(w io.Writer) {
   The package and its copy_deps are copied to pkg/<name> and imports
   are rewritten to your module path. Dependencies are added with go get.
 
+  If pkg/<name> already exists, the command fails unless %s is used.
+  With %s, existing content is overwritten (useful for automation).
+
 %s
-  %s pkg %s
-  %s pkg %s
-  %s pkg %s
+  %s, %s
+      Overwrite existing pkg/<name> if it exists (fails by default)
+
+%s
+  %s %s pkg
+  %s %s pkg %s
+  %s %s pkg %s
+  %s %s pkg %s
+  %s %s pkg %s
+  %s %s pkg %s %s
 
 `,
 		title("Install a reusable package into the current project."),
+		cmd("cosmos"),
 		cmd("cosmos"), accent("<name>"),
 		cmd("cosmos"), accent("list pkgs"),
+		flagStyle("--force"),
+		flagStyle("--force"),
+		section("FLAGS:"),
+		flagStyle("--force"), flagStyle("-f"),
 		section("EXAMPLES:"),
+		dimmed("#"), cmd("cosmos"),
+		dimmed("#"), cmd("cosmos"), flagStyle("-i"),
 		dimmed("#"), cmd("cosmos"), accent("logger"),
 		dimmed("#"), cmd("cosmos"), accent("config"),
 		dimmed("#"), cmd("cosmos"), accent("validator"),
+		dimmed("#"), cmd("cosmos"), accent("logger"), flagStyle("--force"),
 	)
 }
 
@@ -237,7 +345,10 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, `%s
 
   %s init              Start a new project (interactive)
+  %s pkg               Install packages (interactive: list, select one or more)
   %s pkg %s       Install a package (logger, config, ...) into current project
+  %s update            Refresh templates and packages cache (git pull)
+  %s cache %s    Same as %s update
   %s list %s     List available templates
   %s list %s     List available packages
 
@@ -247,11 +358,47 @@ func printUsage(w io.Writer) {
 `,
 		section("USAGE:"),
 		cmd("cosmos"),
+		cmd("cosmos"),
 		cmd("cosmos"), accent("<name>"),
+		cmd("cosmos"),
+		cmd("cosmos"), accent("refresh"),
+		cmd("cosmos"),
 		cmd("cosmos"), accent("templates"),
 		cmd("cosmos"), accent("pkgs"),
 		cmd("cosmos"), flagStyle("--help"), flagStyle("-h"),
 		cmd("cosmos"), flagStyle("--version"), flagStyle("-v"),
+	)
+}
+
+func printUpdateUsage(w io.Writer) {
+	printBanner(w)
+	fmt.Fprintf(w, `%s
+
+  %s update    Run git pull in the local templates and packages caches
+               (~/.cache/cosmos/templates/_repo and ~/.cache/cosmos/packages/_repo)
+               so the next init or pkg uses the latest versions.
+
+  If a cache does not exist yet, nothing is done for that cache.
+  Use %s init or %s pkg to create the cache on first use.
+
+`,
+		title("Refresh templates and packages cache."),
+		cmd("cosmos"),
+		cmd("cosmos"),
+		cmd("cosmos"),
+	)
+}
+
+func printCacheUsage(w io.Writer) {
+	printBanner(w)
+	fmt.Fprintf(w, `%s
+
+  %s cache %s    Same as %s update: refresh templates and packages cache (git pull).
+
+`,
+		title("Cache operations."),
+		cmd("cosmos"), accent("refresh"),
+		cmd("cosmos"),
 	)
 }
 
@@ -331,28 +478,15 @@ var builtInDescriptions = map[string]string{
 	"cli":    "Command-line tool with subcommands",
 }
 
-var externalTemplates = []struct {
-	name string
-	desc string
-}{
-	{"api-clean-arch", "template for api with clean architecture"},
-	{"api-grpc", "template for api with grpc"},
-	{"api-hexagonal", "template for api with hexagonal architecture"},
-	{"cli", "template for command line tool"},
-	{"monorepo-starter", "template for monorepo with multiple services"},
-	{"worker-cron", "template worker for cron jobs"},
-	{"worker-queue", "template worker for queue jobs"},
-}
-
 func printTemplateList(w io.Writer) {
 	printBanner(w)
 	cat := catalog.New()
-	templates := cat.ListTemplates()
+	builtIn := cat.ListTemplates()
 
 	fmt.Fprintf(w, "%s\n\n", title("Available templates"))
 	fmt.Fprintf(w, "%s\n", section("Built-in templates (use directly):"))
 	fmt.Fprintf(w, "\n")
-	for _, t := range templates {
+	for _, t := range builtIn {
 		desc := builtInDescriptions[t.Type]
 		if desc == "" {
 			desc = "Go project template"
@@ -364,11 +498,16 @@ func printTemplateList(w io.Writer) {
 		fmt.Fprintf(w, "      %s init %s <name> %s\n\n", cmd("cosmos"), t.Type, flagStyle("--module <path>"))
 	}
 
-	fmt.Fprintf(w, "%s\n", section("External templates (from GitHub):"))
-	fmt.Fprintf(w, "\n")
-	for _, t := range externalTemplates {
-		fmt.Fprintf(w, "  %s  %s\n", accent(t.name), dimmed(t.desc))
-		fmt.Fprintf(w, "      %s init <name> %s %s\n\n", cmd("cosmos"), flagStyle("--template "+t.name), flagStyle("--module <path>"))
+	external, err := github.ListTemplatesWithInfo()
+	if err != nil {
+		fmt.Fprintf(w, "  %s\n\n", dimmed("(could not list external templates)"))
+	} else {
+		fmt.Fprintf(w, "%s\n", section("External templates (from GitHub):"))
+		fmt.Fprintf(w, "\n")
+		for _, t := range external {
+			fmt.Fprintf(w, "  %s  %s\n", accent(t.Name), dimmed(t.Description))
+			fmt.Fprintf(w, "      %s init <name> %s %s\n\n", cmd("cosmos"), flagStyle("--template "+t.Name), flagStyle("--module <path>"))
+		}
 	}
 	fmt.Fprintf(w, "  Use %s to fetch templates from:\n  %s\n\n", flagStyle("--template <name>"), dimmed("github.com/cosmos-toolkit/templates/<name>"))
 	fmt.Fprintf(w, "%s\n", dimmed("Run 'cosmos init --help' for more details."))
@@ -395,7 +534,11 @@ func runInteractiveInit() error {
 		return err
 	}
 
-	// Build template options: built-in + external
+	// Build template options: built-in + external (from GitHub, descriptions from manifest)
+	externalTemplates, err := github.ListTemplatesWithInfo()
+	if err != nil {
+		externalTemplates = nil // proceed with built-in only
+	}
 	templateOpts := make([]string, 0, 3+len(externalTemplates))
 	for _, t := range []struct {
 		name string
@@ -408,7 +551,7 @@ func runInteractiveInit() error {
 		templateOpts = append(templateOpts, fmt.Sprintf("%s - %s (built-in)", t.name, t.desc))
 	}
 	for _, t := range externalTemplates {
-		templateOpts = append(templateOpts, fmt.Sprintf("%s - %s (external)", t.name, t.desc))
+		templateOpts = append(templateOpts, fmt.Sprintf("%s - %s (external)", t.Name, t.Description))
 	}
 
 	var selectedTemplate string
@@ -481,6 +624,92 @@ func runInteractiveInit() error {
 	}
 
 	return executeInit(config)
+}
+
+func runInteractivePkg(force bool) error {
+	printBanner(os.Stdout)
+	fmt.Println(title("Install packages into the current project"))
+	fmt.Println()
+
+	pkgs, err := github.ListPackagesWithInfo()
+	if err != nil {
+		return fmt.Errorf("failed to list packages: %w", err)
+	}
+	if len(pkgs) == 0 {
+		return fmt.Errorf("no packages available")
+	}
+
+	options := make([]string, len(pkgs))
+	for i, p := range pkgs {
+		desc := strings.TrimSpace(p.Description)
+		if desc == "" || desc == "-" {
+			options[i] = p.Name
+		} else {
+			options[i] = fmt.Sprintf("%s - %s", p.Name, p.Description)
+		}
+	}
+
+	var selected []string
+	if err := survey.AskOne(
+		&survey.MultiSelect{
+			Message: "Choose one or more packages to install (space to select, enter to confirm):",
+			Options: options,
+		},
+		&selected,
+		survey.WithValidator(survey.MinItems(1)),
+	); err != nil {
+		return err
+	}
+
+	// Map selected option strings back to package names (first part before " - ")
+	names := make([]string, 0, len(selected))
+	for _, opt := range selected {
+		parts := strings.SplitN(opt, " - ", 2)
+		names = append(names, strings.TrimSpace(parts[0]))
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	// Check which selected packages already exist
+	var existing []string
+	for _, name := range names {
+		if writer.DirectoryExists(filepath.Join(cwd, "pkg", name)) {
+			existing = append(existing, name)
+		}
+	}
+	if len(existing) > 0 && !force {
+		var overwrite bool
+		if err := survey.AskOne(
+			&survey.Confirm{
+				Message: fmt.Sprintf("The following already exist in pkg/: %s. Overwrite?", strings.Join(existing, ", ")),
+				Default: false,
+			},
+			&overwrite,
+		); err != nil {
+			return err
+		}
+		if !overwrite {
+			return fmt.Errorf("skipped: use --force to overwrite existing packages")
+		}
+		force = true
+	}
+
+	opts := pkginstall.InstallOpts{Force: force}
+	for _, name := range names {
+		pkgDir := filepath.Join(cwd, "pkg", name)
+		if writer.DirectoryExists(pkgDir) && force {
+			fmt.Printf("%s Overwriting existing %s\n", dimmed("→"), dimmed("pkg/"+name))
+		}
+		if err := pkginstall.Install(name, cwd, opts); err != nil {
+			return fmt.Errorf("failed to install %s: %w", name, err)
+		}
+		fmt.Printf("%s Package %s installed in %s/pkg/%s\n", green+"✓"+reset, accent(name), dimmed(cwd), accent(name))
+	}
+
+	return nil
 }
 
 func executeInit(config *Config) error {

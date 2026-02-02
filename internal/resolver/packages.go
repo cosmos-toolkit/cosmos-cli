@@ -71,3 +71,32 @@ func ResolvePackagesRepo() (string, error) {
 
 	return repoPath, nil
 }
+
+// PackagesRepoPath returns the path to the cached packages repo (~/.cache/cosmos/packages/_repo).
+func PackagesRepoPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return filepath.Join(homeDir, packagesCacheDir, packagesRepoDir), nil
+}
+
+// PullPackagesRepo runs git pull in the packages cache if the repo exists.
+// It returns (true, nil) when pull ran, (false, nil) when no cache exists, or (_, err) on failure.
+func PullPackagesRepo() (updated bool, err error) {
+	repoPath, err := PackagesRepoPath()
+	if err != nil {
+		return false, err
+	}
+	if !isGitRepo(repoPath) {
+		return false, nil
+	}
+	pullCmd := exec.Command("git", "pull")
+	pullCmd.Dir = repoPath
+	pullCmd.Stdout = os.Stdout
+	pullCmd.Stderr = os.Stderr
+	if err := pullCmd.Run(); err != nil {
+		return false, fmt.Errorf("packages: git pull: %w", err)
+	}
+	return true, nil
+}

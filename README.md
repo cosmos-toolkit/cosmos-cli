@@ -110,6 +110,17 @@ cosmos list templates   # Built-in + external templates (from GitHub)
 cosmos list pkgs        # Reusable packages (logger, config, validator, ...)
 ```
 
+**Refreshing the cache:** templates and packages are cached under `~/.cache/cosmos/`. To pull the latest versions:
+
+```bash
+cosmos update           # git pull in both caches
+cosmos cache refresh    # same as above
+```
+
+If a cache does not exist yet, nothing is done for it; use `cosmos init` or `cosmos pkg` to create it on first use.
+
+**GitHub API:** requests use a 30s timeout to avoid hanging. If you hit rate limits (e.g. in CI), set `GITHUB_TOKEN` so the CLI uses authenticated requests and gets higher limits.
+
 ### Command-line mode (non-interactive)
 
 When you already know the type and flags, you can skip the wizard:
@@ -122,8 +133,16 @@ cosmos init worker jobs --module github.com/your-org/jobs
 cosmos init cli toolbox --module github.com/your-org/toolbox
 ```
 
-**External templates (from GitHub):**  
-Templates are fetched from `github.com/cosmos-toolkit/templates` via Git sparse checkout and cached under `~/.cache/cosmos/templates/`:
+**External templates (from GitHub):**
+Templates are fetched from `github.com/cosmos-toolkit/templates` via Git sparse checkout and cached under `~/.cache/cosmos/templates/`. Descriptions shown in `cosmos list templates` and the interactive init menu come from a root `manifest.yaml` in that repo (same pattern as packages). Example:
+
+```yaml
+templates:
+  api-hexagonal:
+    description: "API with hexagonal architecture"
+  monorepo-starter:
+    description: "Monorepo with multiple services"
+```
 
 ```bash
 cosmos init myapp --module github.com/your-org/myapp --template api-hexagonal
@@ -141,10 +160,18 @@ cosmos init myapp --module github.com/your-org/myapp --template monorepo-starter
 
 From the root of a Go project (where `go.mod` is):
 
+- **Interactive:** run `cosmos pkg` or `cosmos pkg -i` to list packages, select one or more with the arrow keys and space, then confirm with Enter.
+- **By name:** pass the package name as argument.
+
+If `pkg/<name>` already exists, the command **fails** unless you use `--force` (or answer "Overwrite?" in interactive mode). Use `--force` / `-f` to overwrite without prompting (useful for automation).
+
 ```bash
-cosmos pkg logger    # copies pkg/logger + copy_deps, rewrites imports
-cosmos pkg config   # copies pkg/config, runs go get for dependencies
+cosmos pkg              # interactive: list and select packages (single or multiple)
+cosmos pkg -i           # same as above
+cosmos pkg logger       # copies pkg/logger + copy_deps, rewrites imports
+cosmos pkg config      # copies pkg/config, runs go get for dependencies
 cosmos pkg validator
+cosmos pkg logger --force   # overwrite existing pkg/logger
 ```
 
 Use `cosmos list pkgs` to see all available packages.

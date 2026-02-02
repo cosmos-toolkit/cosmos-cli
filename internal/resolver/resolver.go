@@ -145,3 +145,32 @@ func runInDir(dir, name string, args ...string) error {
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
+
+// TemplatesRepoPath returns the path to the cached templates repo (~/.cache/cosmos/templates/_repo).
+func TemplatesRepoPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return filepath.Join(homeDir, cacheDir, repoDir), nil
+}
+
+// PullTemplatesRepo runs git pull in the templates cache if the repo exists.
+// It returns (true, nil) when pull ran, (false, nil) when no cache exists, or (_, err) on failure.
+func PullTemplatesRepo() (updated bool, err error) {
+	repoPath, err := TemplatesRepoPath()
+	if err != nil {
+		return false, err
+	}
+	if !isGitRepo(repoPath) {
+		return false, nil
+	}
+	pullCmd := exec.Command("git", "pull")
+	pullCmd.Dir = repoPath
+	pullCmd.Stdout = os.Stdout
+	pullCmd.Stderr = os.Stderr
+	if err := pullCmd.Run(); err != nil {
+		return false, fmt.Errorf("templates: git pull: %w", err)
+	}
+	return true, nil
+}
