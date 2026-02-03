@@ -2,94 +2,70 @@
 
 **From chaos to scalable structure.**
 
-Cosmos is a CLI designed to help engineers initialize systems with clarity, structure, and long-term maintainability in mind.
-
-It doesn’t generate folders randomly. It doesn’t hide decisions behind magic. Cosmos organizes systems from the very beginning — so they can grow, scale, and evolve without friction.
+Cosmos is a CLI that helps you bootstrap Go projects from templates and add reusable packages. It focuses on clarity, structure, and long-term maintainability.
 
 ## Why Cosmos exists
 
-Every system starts the same way: with uncertainty.
+New projects often start with unclear boundaries, inconsistent structure, and shortcuts that become permanent. Cosmos turns that initial chaos into **intentional structure**: an explicit, predictable starting point so systems can grow without friction.
 
-New projects often begin as a collection of guesses:
+## What Cosmos does
 
-- unclear boundaries
-- inconsistent structure
-- premature abstractions
-- shortcuts that become permanent
+- **Initializes projects** from built-in templates (api, worker, cli) or external templates from `github.com/cosmos-toolkit/templates`.
+- **Installs packages** from `github.com/cosmos-toolkit/packages` into your project’s `pkg/` (with import rewriting and dependency resolution).
+- **Validates** project names, module paths, and template/type choices before generating anything.
 
-Cosmos exists to turn that initial chaos into **intentional structure**.
-
-Not by enforcing a framework. Not by hiding complexity. But by providing a clear, explicit starting point.
-
-## What Cosmos is?
-
-Cosmos gives:
-
-- a system initializer, not a framework
-- explicit by default
-- predictable and deterministic
-- focused on long-term maintenance
-- designed to scale without accidental complexity
+Cosmos is a **system initializer**, not a framework: explicit by default, deterministic, and focused on long-term maintenance.
 
 ## Core concepts
 
-Cosmos works with **systems**, not stacks.
+### Built-in templates
 
-### System types
+Three template types are embedded in the CLI:
 
-Cosmos starts from a small set of well-defined system types (built-in and external):
-
-- **api** — HTTP services and public interfaces
+- **api** — HTTP service with handlers and server
 - **worker** — background processing and async jobs
-- **cli** — developer tools and automation
+- **cli** — command-line tool with subcommands
 
-External templates (e.g. api-hexagonal, monorepo-starter) are listed in the interactive menu. Each type has a clear responsibility and a coherent structure.
+### External templates
 
-**Interactive (recommended):** run `cosmos init` and choose template and options from the prompts.
+Additional templates live in `github.com/cosmos-toolkit/templates`. Each subdirectory is one template (e.g. `api-hexagonal`). They are listed via the GitHub API and in the interactive init menu. Descriptions come from a root `manifest.yaml` (key `templates.<name>.description`). Templates are fetched with **git sparse checkout** and cached under `~/.cache/cosmos/templates/_repo`.
 
-**Non-interactive:** pass type, name, and flags:
+### Templates as contracts
 
-```bash
-cosmos init api payments --module github.com/your-org/payments
-cosmos init worker jobs --module github.com/your-org/jobs
-cosmos init cli toolbox --module github.com/your-org/toolbox
-```
+Each template has a `template.yaml` that declares:
 
-## Templates as contracts
+- **name**, **version**, **types** (e.g. `["api"]`)
+- **defaults** (e.g. `goVersion: "1.23"`)
+- **prompts** (e.g. module, projectName)
+- **features** (optional list)
+- **files.engine** (e.g. `gotmpl`) and optional **files.modulePlaceholder** for import rewriting
 
-In Cosmos, templates are not just file trees. They are contracts.
+This keeps generation predictable and maintainable.
 
-Each template explicitly declares:
+## Commands overview
 
-- what it generates
-- what it expects
-- what decisions are made upfront
-
-This keeps generation predictable and maintainable over time.
-
-## Designed with Go’s philosophy in mind
-
-Cosmos is built around the same principles that guide Go:
-
-- clarity over cleverness
-- explicit over implicit
-- composition over frameworks
-- simplicity that scales
-
-Cosmos is Go-first, but not Go-only.
-The ideas apply to systems — not just code.
+| Command                                     | Description                                                             |
+| ------------------------------------------- | ----------------------------------------------------------------------- |
+| `cosmos` / `cosmos --help`                  | Show usage                                                              |
+| `cosmos version` / `cosmos -v`              | Show version                                                            |
+| `cosmos init`                               | Interactive: project name, template (built-in or external), module path |
+| `cosmos init --list` / `-l`                 | List built-in and external templates                                    |
+| `cosmos list templates`                     | List external templates (from GitHub)                                   |
+| `cosmos list pkgs` / `cosmos list packages` | List available packages                                                 |
+| `cosmos update`                             | Refresh templates and packages caches (git pull)                        |
+| `cosmos cache refresh`                      | Same as `cosmos update`                                                 |
+| `cosmos pkg`                                | Interactive: select one or more packages to install                     |
+| `cosmos pkg <name>`                         | Install package into current project                                    |
 
 ## Usage
 
-### Interactive mode (recommended)
+### Creating a project (interactive)
 
-The simplest way to create a project: run `cosmos init` with no arguments. Cosmos will ask:
+Run `cosmos init` (with no arguments). Cosmos will prompt you for:
 
-1. **Project name** — directory name for the new project
-2. **Template** — choose from a list:
-   - **Built-in:** api, worker, cli
-   - **External (GitHub):** api-clean-arch, api-grpc, api-hexagonal, cli, monorepo-starter, worker-cron, worker-queue
-3. **Module path** — Go module (e.g. `github.com/your-org/myapp`); a default is suggested from your username and project name
+1. **Project name** — directory name (alphanumeric, hyphens, underscores only)
+2. **Template** — built-in (api, worker, cli) or external (from GitHub; list from API and `manifest.yaml`)
+3. **Module path** — Go module (e.g. `github.com/your-org/myapp`); default suggested from `$USER` and project name
 4. **Overwrite?** — if the directory already exists, confirm to replace it
 
 ```bash
@@ -99,228 +75,63 @@ cosmos init --interactive
 cosmos init -i
 ```
 
-No flags needed. Cosmos validates names and module paths as you go.
+You choose the template in the menu—built-in (api, worker, cli) or external (from GitHub). Cosmos validates project name and module path as you go.
 
 ### Listing templates and packages
 
-Before or instead of the interactive flow, you can list what’s available:
+- **Built-in + external templates:** `cosmos init --list` or `cosmos init -l`
+- **External templates only (from GitHub):** `cosmos list templates`
+- **Packages (from GitHub):** `cosmos list pkgs` or `cosmos list packages`
 
-```bash
-cosmos list templates   # Built-in + external templates (from GitHub)
-cosmos list pkgs        # Reusable packages (logger, config, validator, ...)
-```
+**Cache:** Templates and packages are cached under `~/.cache/cosmos/`: templates at `~/.cache/cosmos/templates/_repo`, packages at `~/.cache/cosmos/packages/_repo`. To refresh (git pull): `cosmos update` or `cosmos cache refresh`. If a cache does not exist yet, nothing is done for it; the first `cosmos init` (with external template) or `cosmos pkg` creates it.
 
-**Refreshing the cache:** templates and packages are cached under `~/.cache/cosmos/`. To pull the latest versions:
+**GitHub API:** Requests use a 30s timeout. Set `GITHUB_TOKEN` for higher rate limits (e.g. in CI).
 
-```bash
-cosmos update           # git pull in both caches
-cosmos cache refresh    # same as above
-```
+### Packages
 
-If a cache does not exist yet, nothing is done for it; use `cosmos init` or `cosmos pkg` to create it on first use.
+From the root of your Go project (where `go.mod` is):
 
-**GitHub API:** requests use a 30s timeout to avoid hanging. If you hit rate limits (e.g. in CI), set `GITHUB_TOKEN` so the CLI uses authenticated requests and gets higher limits.
+- `cosmos pkg` — interactive: choose one or more packages to install into `pkg/`.
+- `cosmos pkg <name>` — install a single package. Use `--force` to overwrite existing `pkg/<name>`.
 
-### Command-line mode (non-interactive)
-
-When you already know the type and flags, you can skip the wizard:
-
-**Built-in types (api, worker, cli):**
-
-```bash
-cosmos init api payments --module github.com/your-org/payments
-cosmos init worker jobs --module github.com/your-org/jobs
-cosmos init cli toolbox --module github.com/your-org/toolbox
-```
-
-**External templates (from GitHub):**
-Templates are fetched from `github.com/cosmos-toolkit/templates` via Git sparse checkout and cached under `~/.cache/cosmos/templates/`. Descriptions shown in `cosmos list templates` and the interactive init menu come from a root `manifest.yaml` in that repo (same pattern as packages). Example:
-
-```yaml
-templates:
-  api-hexagonal:
-    description: "API with hexagonal architecture"
-  monorepo-starter:
-    description: "Monorepo with multiple services"
-```
-
-```bash
-cosmos init myapp --module github.com/your-org/myapp --template api-hexagonal
-cosmos init myapp --module github.com/your-org/myapp --template monorepo-starter
-```
-
-**Flags:**
-
-- `--module` (required in non-interactive mode) — Go module path
-- `--template` — External template name (e.g. `api-clean-arch`, `worker-queue`)
-- `--force` — Overwrite existing directory
-- `--list`, `-l` — List available templates and exit
-
-### Adding packages to an existing project
-
-From the root of a Go project (where `go.mod` is):
-
-- **Interactive:** run `cosmos pkg` or `cosmos pkg -i` to list packages, select one or more with the arrow keys and space, then confirm with Enter.
-- **By name:** pass the package name as argument.
-
-If `pkg/<name>` already exists, the command **fails** unless you use `--force` (or answer "Overwrite?" in interactive mode). Use `--force` / `-f` to overwrite without prompting (useful for automation).
-
-```bash
-cosmos pkg              # interactive: list and select packages (single or multiple)
-cosmos pkg -i           # same as above
-cosmos pkg logger       # copies pkg/logger + copy_deps, rewrites imports
-cosmos pkg config      # copies pkg/config, runs go get for dependencies
-cosmos pkg validator
-cosmos pkg logger --force   # overwrite existing pkg/logger
-```
-
-Use `cosmos list pkgs` to see all available packages.
-
----
-
-**Cosmos will:**
-
-- initialize a clear structure
-- apply the selected system type or template
-- validate configuration
-- generate a maintainable starting point
-
-No magic. No surprises.
+List options: `cosmos list pkgs` (or `cosmos list packages`).
 
 ## Installation
 
-Cosmos is a single binary. Install it once and run `cosmos` from any directory (like `docker` or `go`).
+Install Cosmos using the install script. The script runs all validations (OS, architecture, binary availability, install directory) so that installation can complete successfully.
 
-### Option 1: Install without Go (recommended)
-
-**Linux / macOS** — run the install script (downloads the latest release binary):
+**Linux / macOS:**
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/cosmos-toolkit/cosmos-cli/main/scripts/install.sh | sh
 ```
 
-The script detects your OS and architecture, downloads the matching binary from [GitHub Releases](https://github.com/cosmos-toolkit/cosmos-cli/releases), and installs it to `~/.local/bin` (or `/usr/local/bin` if writable). Add that directory to your `PATH` if needed:
+The script downloads the matching binary from [GitHub Releases](https://github.com/cosmos-toolkit/cosmos-cli/releases) and installs it to `~/.local/bin` or `/usr/local/bin`. If the directory is not in your `PATH`, the script will tell you what to add (e.g. `export PATH="$HOME/.local/bin:$PATH"` in `~/.zshrc` or `~/.bashrc`).
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-**Windows** — download the `.zip` for your architecture from [Releases](https://github.com/cosmos-toolkit/cosmos-cli/releases), extract `cosmos.exe`, and place it in a directory that is in your `PATH`.
-
-### Option 2: Install with Go
-
-If you have Go 1.21+ installed:
-
-```bash
-go install github.com/cosmos-toolkit/cosmos-cli/cmd/cosmos@latest
-```
-
-The binary is placed in `$HOME/go/bin`. Ensure that directory is in your `PATH`:
-
-```bash
-export PATH="$HOME/go/bin:$PATH"
-```
-
-### Option 3: Install from source (development)
-
-If you have the repo cloned:
-
-```bash
-cd /caminho/para/cosmos-cli
-make install
-```
+**Windows:** the script does not support Windows; download the `.zip` for your architecture from [Releases](https://github.com/cosmos-toolkit/cosmos-cli/releases), extract `cosmos.exe`, and add it to your `PATH`.
 
 ---
 
-The new project is always created in the **current working directory**. Run `cosmos init` from the folder where you want the project (e.g. `cd ~/labs` then `cosmos init api ...`).
+The new project is always created in the **current working directory**. Run `cosmos init` from the folder where you want the project (e.g. `cd ~/labs` then `cosmos init`).
 
-## Building
+## Contributing
 
-```bash
-make build
-# or
-go build -o bin/cosmos ./cmd/cosmos
-```
-
-## Testing the project
-
-### 1. Build the CLI
+**Build** (from the repo root):
 
 ```bash
-cd /caminho/para/cosmos-cli
-go mod download   # baixa dependências (precisa de rede)
+go mod download
 make build
+# binary: bin/cosmos
 ```
 
-### 2. Test interactive mode
-
-Crie um diretório temporário e rode o cosmos (sem argumentos) para abrir o menu interativo:
+**Test:** run the CLI locally and confirm the interactive flow and generated project:
 
 ```bash
 mkdir -p /tmp/cosmos-test && cd /tmp/cosmos-test
-cosmos init
-# Responda: project name, escolha um template (api/worker/cli ou externo), module path
-ls <nome-do-projeto>/
+../path/to/cosmos-cli/bin/cosmos init
+# Choose template (built-in or external), enter project name and module path
+ls <project-name>/
+cd <project-name> && go build ./...
 ```
 
-Se o cosmos estiver no `PATH` (por exemplo após `make install`), use `cosmos init` de qualquer pasta.
-
-### 3. Test non-interactive (built-in templates)
-
-```bash
-cd /tmp/cosmos-test
-
-# API
-cosmos init api payments --module github.com/you/payments
-ls payments/                    # deve listar go.mod, cmd/, internal/, README.md, etc.
-cd payments && go build ./...   # deve compilar
-
-cd /tmp/cosmos-test
-# Worker
-cosmos init worker jobs --module github.com/you/jobs
-ls jobs/
-
-# CLI
-cosmos init cli toolbox --module github.com/you/toolbox
-ls toolbox/
-```
-
-### 4. Test validation (erros esperados)
-
-```bash
-# Falta --module
-cosmos init api payments
-# Error: --module is required
-
-# Tipo inválido
-cosmos init invalid payments --module github.com/you/payments
-# Error: invalid type
-
-# Nome do projeto inválido (espaço)
-cosmos init api "my project" --module github.com/you/payments
-# Error: project name can only contain...
-```
-
-### 5. Test with --force
-
-```bash
-cosmos init api payments --module github.com/you/payments
-cosmos init api payments --module github.com/you/payments
-# Error: directory payments already exists. Use --force to overwrite
-
-cosmos init api payments --module github.com/you/payments --force
-# Deve sobrescrever sem erro
-```
-
-### 6. Test external template (opcional)
-
-Requer rede e o repositório `github.com/cosmos-toolkit/templates/<nome>` existir:
-
-```bash
-cosmos init myapp --module github.com/you/myapp --template api-hexagonal
-# ou: cosmos list templates  para ver todos os externos
-```
-
-## Project structure
-
-Templates are embedded from `cmd/cosmos/templates/` (api, worker, cli). The entry point is `cmd/cosmos/main.go`.
+Run the test suite when relevant: `go test ./...`
