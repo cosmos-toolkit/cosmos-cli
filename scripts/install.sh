@@ -35,7 +35,7 @@ echo "Installing cosmos (${OS}/${ARCH})..."
 
 # Resolve download URL (prefer jq; fallback grep/sed)
 if command -v jq >/dev/null 2>&1; then
-  DOWNLOAD_URL=$(curl -sSL "$API" | jq -r ".assets[] | select(.name | endswith(\"${SUFFIX}\")) | .browser_download_url")
+  DOWNLOAD_URL=$(curl -sSL "$API" | jq -r "(.assets // [])[] | select(.name | endswith(\"${SUFFIX}\")) | .browser_download_url")
 else
   # Fallback: grep for the asset URL containing our suffix
   DOWNLOAD_URL=$(curl -sSL "$API" | grep "browser_download_url" | grep "$SUFFIX" | head -1 | sed 's/.*"browser_download_url": "\([^"]*\)".*/\1/')
@@ -44,6 +44,12 @@ fi
 if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
   echo "No pre-built binary for ${OS}/${ARCH}. See https://github.com/${REPO}/releases"
   exit 1
+fi
+
+# Dry-run: print URL and exit without installing
+if [ -n "${DRY_RUN:-}" ]; then
+  echo "DRY_RUN: would download from $DOWNLOAD_URL"
+  exit 0
 fi
 
 # Prefer ~/.local/bin; fallback to /usr/local/bin if writable
