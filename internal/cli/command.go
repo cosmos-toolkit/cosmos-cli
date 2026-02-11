@@ -21,7 +21,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-const version = "0.1.0"
+const version = "0.1.4"
 
 const banner = `
 ╭─────────────────────────────────────────────────────────╮
@@ -33,7 +33,7 @@ const banner = `
 │  ╚██████╗╚██████╔╝███████║██║ ╚═╝ ██║╚██████╔╝███████║  │
 │   ╚═════╝ ╚═════╝ ╚══════╝╚═╝     ╚═╝ ╚═════╝ ╚══════╝  │
 │                                                         │
-│        Initialize Go projects from templates            │
+│            From chaos to scalable structure.            │
 │                                                         │
 ╰─────────────────────────────────────────────────────────╯
 `
